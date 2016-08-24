@@ -11,6 +11,7 @@ import requests
 from flask import (Blueprint, flash, jsonify, make_response, redirect,
                    render_template, request, session, url_for)
 from sumy.nlp.tokenizers import Tokenizer
+
 from wtforms.validators import URL
 
 from ..forms import LinkForm
@@ -72,26 +73,31 @@ def webhook():
         return redirect(url_for('site.index'))
 
 
-@site.route('/summary', methods=['POST'])
-def summary():
-    language='english'
-    url=request.form.get('url', '')
-    max_sent=int(request.form.get('max_sent', 10))
-    tokenizer=Tokenizer(language)
-    parser, meta=get_parser(url, tokenizer)
-    summary=run_summarizer(parser, max_sent, language)
-    session_data=dict(
+def get_summary(url, max_sent, language='english'):
+    tokenizer = Tokenizer(language)
+    parser, meta = get_parser(url, tokenizer)
+    summary = run_summarizer(parser, max_sent, language)
+    return dict(
         summary=summary,
         url=url,
         meta=meta,
         max_sent=max_sent
     )
-    session.update(session_data)
+
+
+@site.route('/summary', methods=['POST'])
+def summary():
+    language = 'english'
+    url = request.args.get('url')
+    max_sent = request.args.get('max_sent', 10, type=int)
+    session.update(get_summary(url, max_sent, language))
     return redirect(url_for('site.index', _anchor='summary'))
 
 
 @site.route('/', methods=['GET', 'POST'])
 def index():
+    if 'url' in request.args:
+        session.update(get_summary(request.args.get('url'), request.args.get('max_sent', 10, type=int), 'english'))
     return render_template('index.html',
                            url=session.get('url'),
                            meta=session.get('meta'),
